@@ -1,53 +1,58 @@
+bash
 #!/bin/bash
 
-# 检测是否有硬盘需要挂载
-disks=$(lsblk -nr | grep -v -e "boot" -e $(df -h | awk '{print $1}' | tail -n +2) | awk '{print $1}')
-if [ -z "$disks" ]; then
-  echo "没有可挂载的硬盘！"
-  exit 1
-else
-  echo "可挂载硬盘列表:"
-  echo "$disks"
+# 检测操作系统类型  
+if grep -qi ubuntu /etc/issue; then
+    OS_TYPE=Ubuntu
+    DISK_PATH=/dev/ 
+elif grep -qi debian /etc/issue; then
+    OS_TYPE=Debian
+    DISK_PATH=/dev/     
+elif grep -qi centos /etc/redhat-release; then
+    OS_TYPE=CentOS
+    DISK_PATH=/dev/  
 fi
 
-# 提示用户输入挂载目录
-read -p "请输入挂载目录: " mountpoint
-if [ -z "$mountpoint" ]; then
-  echo "挂载目录不能为空！"
-  exit 1
-else
-  mkdir -p "$mountpoint"
-  echo "挂载目录为: $mountpoint"
-fi
+# 检测是否有可用硬盘
+AVAILABLE_DISKS=$(blkid -o list | awk '{print $1}' | grep -v NAME) 
+if [[ -z $AVAILABLE_DISKS ]]; then
+    echo "没有找到可用的硬盘。退出脚本......"
+    exit  
+fi  
 
-# 挂载硬盘
-for disk in $disks; do
-  echo "正在挂载硬盘 $disk 到 $mountpoint/$disk ..."
-  mount "/dev/$disk" "$mountpoint/$disk"
-  if [ $? -eq 0 ]; then
-    echo "硬盘 $disk 挂载成功！"
-  else
-    echo "硬盘 $disk 挂载失败！"
-    exit 1
-  fi
-done
+# 获取输入的挂载目录  
+read -p "请输入挂载目录: " MOUNT_POINT   
 
-# 检测是否成功挂载
-read -p "是否需要检测硬盘是否成功挂载？(y/n): " check
-if [ "$check" = "y" ]; then
-  for disk in $disks; do
-    if ! mountpoint -q "$mountpoint/$disk"; then
-      echo "硬盘 $disk 挂载失败！"
-      exit 1
-    else
-      echo "硬盘 $disk 成功挂载到 $mountpoint/$disk"
+# 遍历可用硬盘
+for disk in $AVAILABLE_DISKS   
+do
+    echo "正在挂载 $disk 到 ${MOUNT_POINT}......"
+    if [[ $OS_TYPE == Ubuntu ]] || [[ $OS_TYPE == Debian ]]; then  
+        mkdir -p ${MOUNT_POINT}
+    elif [[ $OS_TYPE == CentOS ]]; then  
+        mkdir ${MOUNT_POINT}
     fi
-  done
-elif [ "$check" = "n" ]; then
-  echo "检测跳过，继续执行后面操作"
-else
-  echo "无效输入，检测跳过，继续执行后面操作"
-fi
+    mount ${DISK_PATH}${disk} ${MOUNT_POINT}
+    echo "${DISK_PATH}${disk} 已挂载到 ${MOUNT_POINT}。"  
+done                                     
 
-# 其他操作
-echo "其他操作..."
+# 是否检测挂载成功
+read -p "是否检测挂载是否成功?[y/n] " TEST_MOUNT
+if [[ $TEST_MOUNT == "n" ]]; then
+    echo "跳过挂载检测......"
+elif [[ $TEST_MOUNT == "y" ]]; then
+    if mountpoint -q ${MOUNT_POINT}; then    
+        echo "挂载成功。"
+    else
+        echo "挂载失败。"  
+    fi
+fi 
+
+# 添加到fstab,开机自动挂载
+if [[ $OS_TYPE == Ubuntu ]] || [[ $OS_TYPE == Debian ]]; then 
+    FSTAB_FILE=/etc/fstab
+elif [[ $OS_TYPE == CentOS ]]; then
+    FSTAB_FILE=/etc/fstab  
+fi
+echo "${DISK_PATH}${disk}  ${MOUNT_POINT}  auto  defaults  0  0" >> $FSTAB_FILE
+echo "已添加到${FSTAB_FILE},开机将自动挂载。"
