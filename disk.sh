@@ -22,57 +22,56 @@ echo "#     5. 选择是否检测挂载结果                                  #
 echo "#                                                           #"    
 echo "##############################################################"   
 
+# 检测是否有硬盘可以挂载  
+disk_info=`fdisk -l | grep '^磁盘'`
+if [ -z "$disk_info" ]; then
+    echo "没有可以挂载的硬盘!"
+    exit 0
+fi 
 
 # 获取输入的挂载目录
-read -p "请输入挂载目录: " mount_point
+read -p "请输入挂载目录: " mount_point  
 if [ -z "$mount_point" ]; then
     echo "挂载目录不能为空!"
     exit 1
 fi
 
-# 检测是否有硬盘可以挂载  
-disk_info=`fdisk -l | grep '^磁盘'` 
-if [ -z "$disk_info" ]; then
-    echo "没有可以挂载的硬盘!"
-    exit 0
-fi
-
-# 挂载硬盘
+# 挂载硬盘 
 fdisk() {
     for disk in `fdisk -l | awk '/^磁盘/{print $2}'`; do
         partition=`fdisk -l /dev/$disk | grep '^/dev/' | awk '{print $1}'`
         # 检测分区是否已挂载,如果已挂载提示并跳过
         mounted=`df -h | grep $partition`
         if [ ! -z "$mounted" ]; then
-            echo "$partition 已挂载!"
+            echo "$partition 已挂载!"    
             continue
-        fi 
+        fi  
         # 创建挂载点目录
         mkdir $mount_point
         # 添加开机自动挂载信息
         echo "$partition $mount_point 自动 默认值 0 0" >> /etc/fstab
         # 挂载分区
-        mount -a
-        # 检测是否挂载成功 
-        while true; do 
+        mount -a  
+        # 检测是否挂载成功
+        while true; do     
             read -p "检查挂载是否成功?(y/n) :" check
             if [ "$check" = "y" ]; then
                 mounted_now=`df -h | grep $partition`
-                if [ ! -z "$mounted_now" ]; then  
+                if [ ! -z "$mounted_now" ]; then    
                     echo "$partition 挂载成功!"
                 else
-                    echo "挂载失败!" 
+                    echo "挂载失败!"   
                     umount $mount_point
                     sed -i "/$partition/d" /etc/fstab
                 fi
                 break
-            elif [ "$check" = "n" ]; then 
+            elif [ "$check" = "n" ]; then   
                 break
             else
                 echo "请输入 y 或 n!"
             fi
         done
     done
-} 
+}
 
 fdisk
